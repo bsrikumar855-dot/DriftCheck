@@ -1,6 +1,6 @@
 {
   "name": "driftcheck",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI that verifies a live deployment actually works — detects env var drift, stale commits, preview-vs-production mismatches, and issues a green checkmark won't show you.",
   "type": "module",
   "bin": {
@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "playwright-core": "^1.48.0",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
     "vitest": "^5.0.0"
