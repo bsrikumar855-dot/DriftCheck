@@ -1,10 +1,10 @@
 {
-  "name": "driftcheck",
-  "version": "0.2.0",
+  "name": "@shreekumar007/driftcheck",
+  "version": "0.2.2",
   "description": "CLI that verifies a live deployment actually works — detects env var drift, stale commits, preview-vs-production mismatches, and issues a green checkmark won't show you.",
   "type": "module",
   "bin": {
-    "driftcheck": "./dist/cli.js"
+    "driftcheck": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,5 +1,11 @@
-import type { BrowserSource, RenderCheckResult, RenderRequestRecord } from '../types.js';
+import { exec } from 'node:child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
+import type { BrowserSource, PlaywrightCoreSource, RenderCheckResult, RenderRequestRecord } from '../types.js';
 
+const execAsync = promisify(exec);
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
@@ -14,10 +20,72 @@ function empty(skipReason?: string): RenderCheckResult {
   return { available: false, skipReason, requests: [], consoleErrors: [], bodyText: '' };
 }
 
+type PlaywrightCoreModule = typeof import('playwright-core');
+
+/**
+ * `npx driftcheck <url>` runs from an isolated npx cache tree containing
+ * only driftcheck's own declared dependencies — its ancestor directories
+ * have nothing to do with either a project-local or a global npm install,
+ * so a bare `import('playwright-core')` can only ever succeed when it
+ * happens to sit in an ancestor node_modules (this repo's own
+ * devDependency, or a project that installed driftcheck and
+ * playwright-core as siblings). For the `npx`-from-nowhere case, ask npm
+ * directly where its global root is and import from that absolute path.
+ * NODE_PATH is not an option here — Node's ESM resolver ignores it
+ * entirely (documented, CJS-only behavior).
+ *
+ * Uses `exec` (a shell command string), not `execFile`: on Windows, `npm`
+ * resolves to `npm.cmd`, which `execFile` cannot run without shell
+ * involvement (confirmed directly — it fails with ENOENT every time).
+ * `exec` goes through a shell by construction, with none of `execFile`'s
+ * "args array + shell:true" combination that triggers Node's argument-
+ * escaping deprecation warning — safe here regardless, since the command
+ * is a fixed literal with no interpolated input.
+ */
+async function resolvePlaywrightCore(): Promise<
+  { module: PlaywrightCoreModule; source: PlaywrightCoreSource } | undefined
+> {
+  try {
+    const module = (await import('playwright-core')) as PlaywrightCoreModule;
+    return { module, source: 'bare-specifier' };
+  } catch {
+    // fall through to the global npm root below
+  }
+
+  try {
+    const { stdout } = await execAsync('npm root -g', { timeout: 5000 });
+    const globalRoot = stdout.trim();
+    const pkgDir = path.join(globalRoot, 'playwright-core');
+    const pkgJsonPath = path.join(pkgDir, 'package.json');
+
+    const pkgJsonRaw = await fs.readFile(pkgJsonPath, 'utf-8');
+    const pkgJson = JSON.parse(pkgJsonRaw);
+
+    // playwright-core (1.63.x) ships no top-level "main" at all — only an
+    // "exports" map, where "." -> import/require/default. A bare `import()`
+    // resolves the "import" condition automatically; since we're bypassing
+    // normal resolution to import from a raw absolute path, we replicate
+    // just that one condition ourselves rather than a full exports
+    // resolver: import -> default -> legacy "main" -> "index.js" as a last
+    // resort for hypothetical older/simpler versions.
+    const dotExport = pkgJson.exports?.['.'];
+    const entryRelative: string =
+      (typeof dotExport === 'string' ? dotExport : (dotExport?.import ?? dotExport?.default)) ??
+      pkgJson.main ??
+      'index.js';
+    const entryAbsolute = path.join(pkgDir, entryRelative);
+
+    const module = (await import(pathToFileURL(entryAbsolute).href)) as PlaywrightCoreModule;
+    return { module, source: 'global-npm-root' };
+  } catch {
+    return undefined;
+  }
+}
+
 type LaunchAttempt = {
   source: BrowserSource;
   label: string;
-  options?: Parameters<typeof import('playwright-core').chromium.launch>[0];
+  options?: Parameters<PlaywrightCoreModule['chromium']['launch']>[0];
 };
 
 const LAUNCH_ATTEMPTS: LaunchAttempt[] = [
@@ -33,7 +101,7 @@ const LAUNCH_ATTEMPTS: LaunchAttempt[] = [
  * full check the default experience for them with zero extra download.
  */
 async function launchBrowser(
-  playwrightCore: typeof import('playwright-core')
+  playwrightCore: PlaywrightCoreModule
 ): Promise<{ browser: import('playwright-core').Browser; source: BrowserSource } | undefined> {
   for (const attempt of LAUNCH_ATTEMPTS) {
     try {
@@ -56,14 +124,15 @@ export async function checkRender(
   url: string,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<RenderCheckResult> {
-  let playwrightCore: typeof import('playwright-core');
-  try {
-    playwrightCore = await import('playwright-core');
-  } catch {
+  const resolved = await resolvePlaywrightCore();
+  if (!resolved) {
     return empty(
-      'playwright-core is not installed. Run `npm install -g playwright-core && npx playwright install chromium` to enable console/network error detection.'
+      'playwright-core is not installed (checked both a local/project install and the global npm root). ' +
+        'Run `npm install -g playwright-core && npx playwright install chromium` to enable console/network error detection — ' +
+        "if it still doesn't work afterward, check that `npm` is on PATH and that you don't have a non-standard global prefix."
     );
   }
+  const { module: playwrightCore, source: playwrightCoreSource } = resolved;
 
   const launched = await launchBrowser(playwrightCore);
   if (!launched) {
@@ -104,7 +173,7 @@ export async function checkRender(
       .evaluate(() => document.body?.innerText?.trim() ?? '')
       .catch(() => '');
 
-    return { available: true, browserSource: source, requests, consoleErrors, bodyText };
+    return { available: true, browserSource: source, playwrightCoreSource, requests, consoleErrors, bodyText };
   } finally {
     await browser.close();
   }

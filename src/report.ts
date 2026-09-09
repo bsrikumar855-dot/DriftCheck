@@ -169,7 +169,9 @@ export function printReport(result: DriftCheckResult): void {
   }
 
   if (render.available) {
-    console.log(`${pc.bold('Render check:')} via ${browserSourceLabel(render.browserSource)}`);
+    const resolutionNote =
+      render.playwrightCoreSource === 'global-npm-root' ? ' (playwright-core resolved from global npm root)' : '';
+    console.log(`${pc.bold('Render check:')} via ${browserSourceLabel(render.browserSource)}${resolutionNote}`);
   }
 
   if (!render.available && render.skipReason) {
@@ -181,8 +183,7 @@ export function printReport(result: DriftCheckResult): void {
         `  This run only checked reachability${vercel.isVercel ? ' and platform identity' : ''} — it did NOT check whether the page actually renders correctly.`
       )
     );
-    console.log(pc.yellow('  To enable full checks:'));
-    console.log(pc.yellow('    npm i -g playwright-core && npx playwright install chromium'));
+    console.log(pc.yellow(`  ${render.skipReason}`));
     console.log(pc.dim('─'.repeat(60)));
   }
 

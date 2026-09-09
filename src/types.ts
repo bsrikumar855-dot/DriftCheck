@@ -38,6 +38,8 @@ export interface RenderRequestRecord {
 
 export type BrowserSource = 'bundled-chromium' | 'system-chrome' | 'system-edge';
 
+export type PlaywrightCoreSource = 'bare-specifier' | 'global-npm-root';
+
 export interface RenderCheckResult {
   /** false if the check never ran (no browser available, or reachability already failed) */
   available: boolean;
@@ -45,6 +47,8 @@ export interface RenderCheckResult {
   skipReason?: string;
   /** which browser actually launched, when available is true */
   browserSource?: BrowserSource;
+  /** how playwright-core itself was resolved, when available is true */
+  playwrightCoreSource?: PlaywrightCoreSource;
   requests: RenderRequestRecord[];
   consoleErrors: string[];
   bodyText: string;

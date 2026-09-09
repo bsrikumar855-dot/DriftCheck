@@ -3,7 +3,7 @@
 **Your deploy says green. Your app might still be broken. driftcheck tells you why — zero config, no tests to write.**
 
 ```bash
-npx driftcheck https://myapp.vercel.app
+npx @shreekumar007/driftcheck https://myapp.vercel.app
 ```
 
 ## See it catch a real bug
@@ -78,14 +78,16 @@ No config file. No assertions to write. Point it at a URL and read the findings.
 Nothing to install for one-off use:
 
 ```bash
-npx driftcheck https://myapp.vercel.app
+npx @shreekumar007/driftcheck https://myapp.vercel.app
 ```
 
 Or add it to a project:
 
 ```bash
-npm install --save-dev driftcheck
+npm install --save-dev @shreekumar007/driftcheck
 ```
+
+The package name is scoped (`@shreekumar007/driftcheck`), but the installed command is still just `driftcheck` — that's what the package's `bin` field maps to, unaffected by the scope.
 
 ## Usage
 
@@ -109,7 +111,7 @@ Findings:
 Exit code is `0` when nothing wrong was found, `1` when a finding is severity `error` — so it's usable as a CI gate right away:
 
 ```bash
-npx driftcheck https://myapp.vercel.app || exit 1
+npx @shreekumar007/driftcheck https://myapp.vercel.app || exit 1
 ```
 
 Use `--json` for scripting:
@@ -145,11 +147,15 @@ The render check (`src/checks/render.ts`) loads the page in a real headless brow
 - Any console error (warning)
 - A blank render — no rendered text content after load (warning)
 
-`playwright-core` is **not** a dependency of this package — not even an optional one — so `npx driftcheck <url>` stays exactly as light as v0.1 for anyone who doesn't need this check.
+`playwright-core` is **not** a dependency of this package — not even an optional one — so `npx @shreekumar007/driftcheck <url>` stays exactly as light as v0.1 for anyone who doesn't need this check.
 
-To make the full check the default experience for as many people as possible with zero extra download, it tries, in order: a pinned bundled Chromium (if you've run `playwright install`) → your system Chrome → your system Edge → gives up. Whichever one launches is named in the output (`Render check: via bundled Chromium` / `via system Chrome` / `via system Edge`), so you always know exactly what ran.
+There are actually two fallback chains here, for two different questions — "is `playwright-core` available at all" and, once it is, "which browser does it launch":
 
-If none of those are available, driftcheck says so loudly rather than quietly skipping it:
+**Finding `playwright-core` itself.** A plain `import('playwright-core')` is tried first — this covers this repo's own devDependency, or any project that installed driftcheck and `playwright-core` as siblings in the same `node_modules`. But `npx @shreekumar007/driftcheck <url>` runs from an isolated npx cache directory whose ancestors have nothing to do with a global install, so that bare import can never see a `npm install -g playwright-core`. When it fails, driftcheck asks npm directly where its global root is (`npm root -g`) and imports from that absolute path instead — so the global install path actually works for the exact one-off `npx` usage this tool is built around, not just for local project installs.
+
+**Launching a browser.** Once `playwright-core` itself is found, it tries, in order: a pinned bundled Chromium (if you've run `playwright install`) → your system Chrome → your system Edge → gives up. Whichever one launches is named in the output, along with how `playwright-core` itself was resolved when that took the global-root path: `Render check: via bundled Chromium` / `via system Chrome (playwright-core resolved from global npm root)` / etc.
+
+If neither `playwright-core` nor a browser can be found by any of those paths, driftcheck says so loudly rather than quietly skipping it:
 
 ```
 $ driftcheck https://drift-fixture.vercel.app
@@ -158,24 +164,23 @@ driftcheck  →  https://drift-fixture.vercel.app
 ────────────────────────────────────────────────────────────
 Final URL:    https://drift-fixture.vercel.app
 Status:       200
-Time:         410ms
+Time:         524ms
 Platform:     Vercel (region: bom1)
 Environment:  unknown  "drift-fixture.vercel.app" doesn't match a known preview pattern...
 
 ────────────────────────────────────────────────────────────
 ⚠ Render checks skipped — no browser available.
   This run only checked reachability and platform identity — it did NOT check whether the page actually renders correctly.
-  To enable full checks:
-    npm i -g playwright-core && npx playwright install chromium
+  playwright-core is not installed (checked both a local/project install and the global npm root). Run `npm install -g playwright-core && npx playwright install chromium` to enable console/network error detection — if it still doesn't work afterward, check that `npm` is on PATH and that you don't have a non-standard global prefix.
 ────────────────────────────────────────────────────────────
 
 Findings:
   i Reachable, responded with a successful status. No obvious drift detected at this check level.
 ```
 
-Note what that output does **not** say: it does not say "no drift detected" and mean it — it says reachability was fine and is explicit that the deeper check never ran. Exit code stays `0` here — the absence of a check isn't itself a failure — but the report is honest about being incomplete rather than looking identical to a clean full pass. (This is the exact deployment used in the demo above; run it yourself without a browser installed to see this.)
+Note what that output does **not** say: it does not say "no drift detected" and mean it — it says reachability was fine and is explicit that the deeper check never ran. Exit code stays `0` here — the absence of a check isn't itself a failure — but the report is honest about being incomplete rather than looking identical to a clean full pass. (This is the exact deployment used in the demo above; run it yourself without `playwright-core` installed anywhere to see this.)
 
-To install a pinned browser yourself instead of relying on system Chrome/Edge:
+To install a pinned browser yourself:
 
 ```bash
 npm install -g playwright-core
