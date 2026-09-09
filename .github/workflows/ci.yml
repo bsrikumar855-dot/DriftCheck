@@ -40,13 +40,21 @@ jobs:
           output=$(node dist/cli.js https://drift-fixture.vercel.app 2>&1)
           code=$?
           set -e
+          echo "----- BEGIN driftcheck output -----"
           echo "$output"
-          echo "--- exit code: $code ---"
+          echo "----- END driftcheck output (exit $code) -----"
+          # Surface the real output in the failure annotation too — job logs
+          # aren't readable via the public API, so a bare "it failed" is not
+          # actionable.
+          snippet=$(echo "$output" | head -25 | tr '\n' '|' | cut -c1-900)
           if [ "$code" -ge 2 ]; then
-            echo "::error::driftcheck crashed on Node 18 (exit $code)"
+            echo "::error::driftcheck crashed on Node 18 (exit $code). Output: $snippet"
             exit 1
           fi
           for marker in "Final URL:" "Status:" "Platform:"; do
-            echo "$output" | grep -q "$marker" || { echo "::error::output missing '$marker'"; exit 1; }
+            if ! echo "$output" | grep -q "$marker"; then
+              echo "::error::Node 18 output missing '$marker' (exit $code). Output: $snippet"
+              exit 1
+            fi
           done
           echo "Node 18 runtime smoke test passed (exit $code — 0=clean, 1=findings)"
