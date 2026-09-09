@@ -19,4 +19,34 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
-      - run: npm test
+
+      # vitest 5 declares engines ^22.12.0 || ^24 || >=26 and genuinely
+      # cannot run on Node 18 (it does run on 20 in practice). Rather than
+      # downgrade vitest — 2.x carries known vulnerabilities — the suite
+      # runs on 20/22 and Node 18 verifies the shipped artifact instead.
+      - name: Run test suite
+        if: matrix.node-version != 18
+        run: npm test
+
+      # The package claims engines >=18. Nothing had ever actually executed
+      # dist/ on Node 18 to check that claim. This runs the real CLI against
+      # the live fixture and asserts real output rather than trusting a green
+      # build. Exit 1 is a valid outcome (findings present); only a crash
+      # (exit >= 2) or missing output is a failure.
+      - name: Smoke test built CLI on Node 18
+        if: matrix.node-version == 18
+        run: |
+          set +e
+          output=$(node dist/cli.js https://drift-fixture.vercel.app 2>&1)
+          code=$?
+          set -e
+          echo "$output"
+          echo "--- exit code: $code ---"
+          if [ "$code" -ge 2 ]; then
+            echo "::error::driftcheck crashed on Node 18 (exit $code)"
+            exit 1
+          fi
+          for marker in "Final URL:" "Status:" "Platform:"; do
+            echo "$output" | grep -q "$marker" || { echo "::error::output missing '$marker'"; exit 1; }
+          done
+          echo "Node 18 runtime smoke test passed (exit $code — 0=clean, 1=findings)"
