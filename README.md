@@ -1,5 +1,9 @@
 # driftcheck
 
+[![npm](https://img.shields.io/npm/v/@shreekumar007/driftcheck)](https://www.npmjs.com/package/@shreekumar007/driftcheck)
+[![CI](https://github.com/bsrikumar855-dot/DriftCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/bsrikumar855-dot/DriftCheck/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@shreekumar007/driftcheck)](./LICENSE)
+
 **Your deploy says green. Your app might still be broken. driftcheck tells you why — zero config, no tests to write.**
 
 ```bash
@@ -103,6 +107,7 @@ Status:       200
 Time:         142ms
 Platform:     Vercel (region: iad1)
 Environment:  production   "myapp.vercel.app" is a bare *.vercel.app alias...
+Render check: via bundled Chromium
 
 Findings:
   i Reachable, responded with a successful status. No obvious drift detected at this check level.
@@ -232,6 +237,8 @@ The render check (`src/checks/render.ts`) loads the page in a real headless brow
 - A blank render — no rendered text content after load (warning)
 
 `playwright-core` is **not** a dependency of this package — not even an optional one — so `npx @shreekumar007/driftcheck <url>` stays exactly as light as v0.1 for anyone who doesn't need this check.
+
+**The render check needs Node 20+.** The rest of driftcheck runs on Node 18 (`engines: >=18`), but `playwright-core` calls `process.exit()` at import time on older versions rather than throwing, so driftcheck checks the Node version *before* importing it. On Node 18 you get the normal skip block and the other checks run as usual — not a crash. This is verified on every commit: CI runs the real built CLI against the live fixture on genuine Node 18.
 
 There are actually two fallback chains here, for two different questions — "is `playwright-core` available at all" and, once it is, "which browser does it launch":
 
