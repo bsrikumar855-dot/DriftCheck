@@ -1,0 +1,52 @@
+{
+  "name": "driftcheck",
+  "version": "0.1.0",
+  "description": "CLI that verifies a live deployment actually works — detects env var drift, stale commits, preview-vs-production mismatches, and issues a green checkmark won't show you.",
+  "type": "module",
+  "bin": {
+    "driftcheck": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "vercel",
+    "deployment",
+    "cli",
+    "devtools",
+    "drift-detection",
+    "nextjs",
+    "ci-cd",
+    "deployment-verification"
+  ],
+  "author": "Shreekumar",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsrikumar855-dot/DriftCheck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bsrikumar855-dot/DriftCheck/issues"
+  },
+  "homepage": "https://github.com/bsrikumar855-dot/DriftCheck#readme",
+  "dependencies": {
+    "picocolors": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3",
+    "vitest": "^5.0.0"
+  }
+}
