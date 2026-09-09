@@ -45,10 +45,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "playwright-core": "^1.48.0",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3",
-    "vitest": "^5.0.0"
+    "vitest": "^4.1.11"
   }
 }
