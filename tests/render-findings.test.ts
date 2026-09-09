@@ -108,18 +108,24 @@ describe('renderFindings', () => {
       'https://example.com',
       render({ consoleErrors: ['Uncaught TypeError: Cannot read properties of undefined'] })
     );
-    expect(findings).toContainEqual({
-      severity: 'warning',
-      message: 'Console error: Uncaught TypeError: Cannot read properties of undefined',
-    });
+    // objectContaining, not exact equality: findings also carry additive
+    // code/data metadata now. The message text asserted here is unchanged.
+    expect(findings).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        message: 'Console error: Uncaught TypeError: Cannot read properties of undefined',
+      })
+    );
   });
 
   it('warns on a blank render (empty body text)', () => {
     const findings = renderFindings('https://example.com', render({ bodyText: '' }));
-    expect(findings).toContainEqual({
-      severity: 'warning',
-      message: 'Page body has no rendered text content after load — possible blank render.',
-    });
+    expect(findings).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        message: 'Page body has no rendered text content after load — possible blank render.',
+      })
+    );
   });
 
   it('does not warn about blank render when the page has visible content', () => {

@@ -16,11 +16,18 @@ export function buildFindings(input: {
   const v01Findings: Finding[] = [];
 
   if (reachability.error) {
-    v01Findings.push({ severity: 'error', message: reachability.error });
+    v01Findings.push({
+      severity: 'error',
+      message: reachability.error,
+      code: 'BAD_STATUS',
+      data: { url: reachability.requestedUrl, error: reachability.error },
+    });
   } else if (!reachability.ok) {
     v01Findings.push({
       severity: 'error',
       message: `Final response was HTTP ${reachability.finalStatus} — not a successful status.`,
+      code: 'BAD_STATUS',
+      data: { url: reachability.finalUrl, status: reachability.finalStatus },
     });
   }
 
@@ -28,6 +35,8 @@ export function buildFindings(input: {
     v01Findings.push({
       severity: 'warning',
       message: `${reachability.redirectChain.length} redirect hops before reaching a final response — this can slow down real users too.`,
+      code: 'REDIRECT_CHAIN',
+      data: { url: reachability.finalUrl, hops: reachability.redirectChain.length },
     });
   }
 
@@ -36,6 +45,8 @@ export function buildFindings(input: {
       severity: 'error',
       message:
         'Got HTTP 401 from a Vercel deployment. This usually means Deployment Protection (password/SSO) is enabled — check Project Settings → Deployment Protection.',
+      code: 'DEPLOYMENT_PROTECTION',
+      data: { url: reachability.finalUrl, status: reachability.finalStatus },
     });
   }
 
@@ -43,6 +54,8 @@ export function buildFindings(input: {
     v01Findings.push({
       severity: 'warning',
       message: `This looks like a PREVIEW deployment, not production. ${vercel.environmentReason} If you expected production, double check the URL and your git branch.`,
+      code: 'PREVIEW_ENVIRONMENT',
+      data: { url: reachability.finalUrl, reason: vercel.environmentReason },
     });
   }
 
@@ -63,6 +76,8 @@ export function buildFindings(input: {
     findings.push({
       severity: 'info',
       message: 'Reachable, responded with a successful status. No obvious drift detected at this check level.',
+      code: 'ALL_CLEAR',
+      data: { url: reachability.finalUrl, status: reachability.finalStatus },
     });
   }
 
@@ -92,6 +107,8 @@ export function renderFindings(targetUrl: string, render: RenderCheckResult): Fi
       findings.push({
         severity: 'error',
         message: `Request to ${req.url} has a literal "${tokenMatch[1]}" in its path — almost certainly an unset environment variable reaching a URL at runtime.`,
+        code: 'UNDEFINED_IN_PATH',
+        data: { url: req.url, token: tokenMatch[1], status: req.status },
       });
     }
 
@@ -100,6 +117,8 @@ export function renderFindings(targetUrl: string, render: RenderCheckResult): Fi
       findings.push({
         severity: 'error',
         message: `Request to ${req.url} targets localhost from a non-localhost deployment — likely a hardcoded dev URL shipped to production.`,
+        code: 'LOCALHOST_IN_PROD',
+        data: { url: req.url, status: req.status, deploymentOrigin: targetOrigin ?? targetUrl },
       });
     }
 
@@ -107,18 +126,27 @@ export function renderFindings(targetUrl: string, render: RenderCheckResult): Fi
       findings.push({
         severity: 'error',
         message: `Same-origin request to ${req.url} returned HTTP ${req.status}.`,
+        code: 'SAME_ORIGIN_ERROR',
+        data: { url: req.url, status: req.status },
       });
     }
   }
 
   for (const msg of render.consoleErrors) {
-    findings.push({ severity: 'warning', message: `Console error: ${msg}` });
+    findings.push({
+      severity: 'warning',
+      message: `Console error: ${msg}`,
+      code: 'CONSOLE_ERROR',
+      data: { text: msg, url: targetUrl },
+    });
   }
 
   if (render.bodyText.length === 0) {
     findings.push({
       severity: 'warning',
       message: 'Page body has no rendered text content after load — possible blank render.',
+      code: 'BLANK_RENDER',
+      data: { url: targetUrl },
     });
   }
 
@@ -192,6 +220,22 @@ export function printReport(result: DriftCheckResult): void {
   for (const f of findings) {
     console.log(`  ${findingIcon(f.severity)} ${f.message}`);
   }
+  console.log('');
+}
+
+/**
+ * Printed only when --fix-prompt is passed AND something qualified. The
+ * prompt body is deliberately uncolored so it survives copy/paste into
+ * another tool without ANSI escapes riding along.
+ */
+export function printFixPrompt(prompt: string): void {
+  console.log(pc.dim('─'.repeat(60)));
+  console.log(pc.bold('Suggested prompt for your coding agent — copy everything below:'));
+  console.log(pc.dim('─'.repeat(60)));
+  console.log('');
+  console.log(prompt);
+  console.log('');
+  console.log(pc.dim('─'.repeat(60)));
   console.log('');
 }
 

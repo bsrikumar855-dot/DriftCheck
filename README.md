@@ -92,7 +92,7 @@ The package name is scoped (`@shreekumar007/driftcheck`), but the installed comm
 ## Usage
 
 ```bash
-driftcheck <url> [--json] [--timeout=<ms>]
+driftcheck <url> [--json] [--fix-prompt] [--timeout=<ms>]
 ```
 
 ```
@@ -120,6 +120,89 @@ Use `--json` for scripting:
 driftcheck https://myapp.vercel.app --json | jq '.findings'
 ```
 
+### `--fix-prompt` — hand the findings to a coding agent
+
+Findings tell you *what's* wrong. `--fix-prompt` turns the ones that are genuinely fixable in code into a ready-to-paste investigation task for a coding agent (Claude Code, Cursor, whatever you use), built entirely from evidence driftcheck already gathered:
+
+```bash
+driftcheck https://drift-fixture.vercel.app --fix-prompt
+```
+
+No LLM call, no extra dependency, no network request beyond the checks that already ran — it's string templating over finding data. It's strictly opt-in: without the flag, output is byte-identical to a run without the feature, and `--json`'s `fixPrompt` field stays `null`.
+
+**Not every finding gets one.** Deployment Protection, preview-vs-production ambiguity, redirect chains and plain reachability failures are deliberately excluded — those are platform or config issues, and sending an agent to grep your repo for a Vercel dashboard toggle wastes your time and invites irrelevant code changes. Only these qualify:
+
+| Finding | Why it qualifies |
+|---|---|
+| `/undefined/`, `/null/`, `/[object%20Object]/` in a request path | Almost always an unset env var reaching a URL at runtime |
+| localhost request from a deployed app | Hardcoded dev URL that was never made configurable |
+| Same-origin 4xx/5xx | Same-origin means it's very likely this codebase's bug |
+| Console error | Weakest evidence — the prompt hedges accordingly |
+
+The prompts are written to make an agent *investigate*, not pattern-match a fix — they say what driftcheck actually observed, what it probably means, and explicitly instruct the agent to confirm the cause before changing anything.
+
+**Findings that share evidence are merged.** One broken request often trips more than one check — a request to `/undefined/api/ping` that 404s produces both a path finding and a same-origin finding. Those are one problem seen twice, so the prompt emits a single section led by the more specific signal and folds the rest in as a corroborating note, rather than sending an agent to investigate the same request twice. Console errors are never merged this way — different signal type, and usually no request URL to match on.
+
+<details>
+<summary>The full prompt driftcheck generated for the fixture (real output, verbatim)</summary>
+
+```
+driftcheck found 2 issues on this deployment that look
+code-fixable. Each is described below with the evidence driftcheck
+actually observed.
+
+### 1. Literal "undefined" in a request path
+
+driftcheck found a request whose URL path contains the literal token
+"undefined":
+
+  https://drift-fixture.vercel.app/undefined/api/ping → 404
+
+This almost always means a JS value that should hold a URL/path segment
+was actually `undefined` at runtime — most commonly an environment
+variable (e.g. `process.env.NEXT_PUBLIC_*`) unset in the deployed
+environment, then string-coerced into a template literal.
+
+Investigate, don't fix blindly:
+1. Search this codebase for a fetch/axios/image call whose URL shape
+   would produce a request matching this path — grep for the path
+   suffix and for `process.env.` usages near it.
+2. Once found, identify which variable is being interpolated and trace
+   its source.
+3. Check whether it's defined in a local .env file. If the app works
+   locally, the deployed platform's environment settings are very
+   likely missing it, or have it under a different name than expected.
+4. Confirm the actual cause before proposing a fix — report back rather
+   than assuming. It could be a name mismatch, not a missing value.
+
+Note: its same-origin check also flagged this exact request (HTTP 404).
+That's the same evidence seen by more than one check, not an
+independent second problem — investigate it once.
+
+### 2. Console error on page load
+
+driftcheck captured this console error on page load:
+
+  Failed to load resource: the server responded with a status of 404 ()
+
+This is weaker evidence than the other finding types — it may be from
+your own code, a third-party script, or noise unrelated to any real
+problem.
+
+Investigate before changing anything:
+1. Determine whether this originates from code in this repo or from a
+   third-party script.
+2. If it's this repo's code, trace it and assess whether it's a real
+   bug or safe to ignore.
+3. If it's third-party, report that back rather than making speculative
+   changes — it's likely not fixable here.
+
+Investigate each of the above independently — do not assume they share
+a root cause unless your investigation actually shows that.
+```
+
+</details>
+
 ## Honesty over confidence
 
 Some of what driftcheck reports is a fact (status code, headers, redirect chain). Some of it is a heuristic (is this preview or production?), because Vercel doesn't expose a "this is production" header to the outside world.
@@ -128,13 +211,14 @@ Where it's a heuristic, driftcheck says so, and it says `unknown` rather than gu
 
 ## Roadmap
 
-v0.1 (reachability and platform identity) and v0.2 (passive render check) are done. In progress:
+v0.1 (reachability and platform identity), v0.2 (passive render check) and v0.3 (agent handoff prompts) are done. In progress:
 
 | Version | Adds |
 |---|---|
 | v0.2 ✅ | Headless-browser check: console errors, failed network requests, blank renders |
-| v0.3 | Repo-aware inference: scans your codebase for `process.env.X` and route files, checks each against the live deployment |
-| v0.4 | Diagnosis: maps each failure to a specific file and fix, not just a symptom |
+| v0.3 ✅ | [`--fix-prompt`](#--fix-prompt--hand-the-findings-to-a-coding-agent): turns code-fixable findings into a ready-to-paste investigation task for a coding agent |
+| v0.4 | Repo-aware inference: scans your codebase for `process.env.X` and route files, checks each against the live deployment |
+| v0.5 | Diagnosis: maps each failure to a specific file and fix, not just a symptom |
 | v1.0 | GitHub Action — runs on every deploy, comments the findings on the PR |
 
 ### The render check tries your existing browser first

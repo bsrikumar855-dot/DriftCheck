@@ -25,9 +25,28 @@ export interface VercelIdentity {
 
 export type FindingSeverity = 'error' | 'warning' | 'info';
 
+/**
+ * Stable, machine-readable identifier for what a finding actually is.
+ * Message text is for humans and may be reworded; this is what code
+ * (e.g. fix-prompt generation) branches on.
+ */
+export type FindingCode =
+  | 'UNDEFINED_IN_PATH'
+  | 'LOCALHOST_IN_PROD'
+  | 'SAME_ORIGIN_ERROR'
+  | 'CONSOLE_ERROR'
+  | 'BLANK_RENDER'
+  | 'DEPLOYMENT_PROTECTION'
+  | 'PREVIEW_ENVIRONMENT'
+  | 'BAD_STATUS'
+  | 'REDIRECT_CHAIN'
+  | 'ALL_CLEAR';
+
 export interface Finding {
   severity: FindingSeverity;
   message: string;
+  code?: FindingCode;
+  data?: Record<string, string | number>;
 }
 
 export interface RenderRequestRecord {

@@ -1,21 +1,14 @@
 #!/usr/bin/env node
+import { parseArgs } from './args.js';
+import { resolveFixPrompt } from './fixPrompt.js';
 import { driftcheck } from './index.js';
-import { printReport } from './report.js';
-
-function parseArgs(argv: string[]) {
-  const args = argv.slice(2);
-  const url = args.find((a) => !a.startsWith('--'));
-  const json = args.includes('--json');
-  const timeoutArg = args.find((a) => a.startsWith('--timeout='));
-  const timeoutMs = timeoutArg ? Number(timeoutArg.split('=')[1]) : undefined;
-  return { url, json, timeoutMs };
-}
+import { printFixPrompt, printReport } from './report.js';
 
 async function main() {
-  const { url, json, timeoutMs } = parseArgs(process.argv);
+  const { url, json, fixPrompt: fixPromptFlag, timeoutMs } = parseArgs(process.argv);
 
   if (!url) {
-    console.error('Usage: driftcheck <url> [--json] [--timeout=<ms>]');
+    console.error('Usage: driftcheck <url> [--json] [--fix-prompt] [--timeout=<ms>]');
     process.exitCode = 2;
     return;
   }
@@ -23,11 +16,15 @@ async function main() {
   const target = /^https?:\/\//i.test(url) ? url : `https://${url}`;
 
   const result = await driftcheck(target, { timeoutMs });
+  const fixPrompt = resolveFixPrompt(result.findings, fixPromptFlag);
 
   if (json) {
-    console.log(JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({ ...result, fixPrompt }, null, 2));
   } else {
     printReport(result);
+    if (fixPrompt) {
+      printFixPrompt(fixPrompt);
+    }
   }
 
   process.exitCode = result.passed ? 0 : 1;

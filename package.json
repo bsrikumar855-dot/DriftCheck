@@ -1,6 +1,6 @@
 {
   "name": "@shreekumar007/driftcheck",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "CLI that verifies a live deployment actually works — detects env var drift, stale commits, preview-vs-production mismatches, and issues a green checkmark won't show you.",
   "type": "module",
   "bin": {
