@@ -40,7 +40,7 @@ Status:       200
 Time:         664ms
 Platform:     Vercel (region: bom1)
 Environment:  unknown  "drift-fixture.vercel.app" doesn't match a known preview pattern, but has a multi-part name — could be a production alias with a hyphenated project name, or a hash-based preview URL. Check your Vercel dashboard to be sure.
-Render check: via bundled Chromium
+Render check: via bundled Chromium (playwright-core resolved from global npm root)
 
 Findings:
   ✗ Request to https://drift-fixture.vercel.app/undefined/api/ping has a literal "undefined" in its path — almost certainly an unset environment variable reaching a URL at runtime.
