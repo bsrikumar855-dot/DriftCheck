@@ -8,6 +8,9 @@ import type { BrowserSource, PlaywrightCoreSource, RenderCheckResult, RenderRequ
 const execAsync = promisify(exec);
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/** playwright-core refuses to load below this and exits the process. */
+const MIN_PLAYWRIGHT_NODE_MAJOR = 20;
+
 /**
  * playwright-core is NOT a declared dependency of this package (not even an
  * optional one) — that's deliberate. Declaring it at all, even as
@@ -124,6 +127,18 @@ export async function checkRender(
   url: string,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<RenderCheckResult> {
+  // playwright-core calls process.exit() at import time on Node < 20 rather
+  // than throwing, so the try/catch around the dynamic import below cannot
+  // save us — the whole CLI dies before printing anything. Checked here so
+  // Node 18 users get the normal skip path instead of a hard crash, which
+  // is what makes this package's `engines: >=18` claim actually true.
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  if (nodeMajor < MIN_PLAYWRIGHT_NODE_MAJOR) {
+    return empty(
+      `Render check requires Node ${MIN_PLAYWRIGHT_NODE_MAJOR}+ (running Node ${process.versions.node}) — playwright-core exits the process on older versions instead of failing gracefully. Reachability and platform identity are unaffected.`
+    );
+  }
+
   const resolved = await resolvePlaywrightCore();
   if (!resolved) {
     return empty(
