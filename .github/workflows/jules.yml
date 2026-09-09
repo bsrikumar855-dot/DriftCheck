@@ -1,0 +1,59 @@
+name: Jules
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  jules:
+    if: |
+      github.event_name == 'issues' ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '/jules') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Jules
+        uses: google/jules-action@v1
+        with:
+          prompt: |
+            Work on the requested issue/task in this repository.
+
+            Repository: DriftCheck
+            Stack: TypeScript / Node.js
+
+            Rules:
+            - Inspect the existing implementation before making changes.
+            - Follow the existing architecture and coding conventions.
+            - Keep changes minimal and scoped to the requested task.
+            - Add or update tests for every behavior change.
+            - Do not weaken or remove existing tests.
+            - Do not introduce unnecessary dependencies.
+            - Preserve CLI behavior and JSON output compatibility.
+            - Treat remote URLs and responses as untrusted input.
+            - Never expose secrets, credentials, tokens, cookies, or environment variables.
+            - Do not perform unrelated refactoring.
+            - Run tests and TypeScript/build checks before completing.
+            - Inspect the final diff and remove unrelated changes.
+            - If requirements are ambiguous, inspect the codebase and choose the safest
+              implementation consistent with existing patterns.
+
+            Definition of done:
+            1. Requested functionality is implemented.
+            2. Tests pass.
+            3. TypeScript/build validation passes where available.
+            4. No unrelated files are modified.
+            5. Final changes are production-quality and reviewable.
