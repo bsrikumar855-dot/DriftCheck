@@ -91,4 +91,24 @@ describe('checkReachability', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain('ENOTFOUND');
   });
+
+  it('captures AbortError as a timeout', async () => {
+    const abortError = new Error('The operation was aborted');
+    abortError.name = 'AbortError';
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abortError));
+
+    const result = await checkReachability('https://example.com', 100);
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Request timed out after 100ms');
+  });
+
+  it('captures unknown thrown object', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('string error'));
+
+    const result = await checkReachability('https://example.com');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('string error');
+  });
 });

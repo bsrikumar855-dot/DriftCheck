@@ -140,4 +140,17 @@ describe('renderFindings', () => {
     );
     expect(findings).toHaveLength(0);
   });
+
+  it('safely handles unparseable invalid URLs in target and requests', () => {
+    const findings = renderFindings(
+      'not-a-valid-url-format',
+      render({
+        requests: [
+          { url: 'also:not:a:valid:url', status: 500 },
+          { url: 'http://localhost:3000/api', status: 200 }
+        ]
+      })
+    );
+    expect(findings.some(f => f.code === 'SAME_ORIGIN_ERROR')).toBe(false);
+  });
 });

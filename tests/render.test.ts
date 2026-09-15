@@ -274,4 +274,46 @@ describe('checkRender', () => {
     expect(result.bodyText).toBe('');
     expect(closeMock).toHaveBeenCalled();
   });
+
+  it('still returns what it can if evaluate fails', async () => {
+    const closeMock = vi.fn().mockResolvedValue(undefined);
+    const page = {
+      on: vi.fn(),
+      goto: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn().mockRejectedValue(new Error('Context destroyed')),
+    };
+    const launch = vi.fn().mockResolvedValue({
+      newPage: vi.fn().mockResolvedValue(page),
+      close: closeMock,
+    });
+    vi.doMock('playwright-core', () => ({ chromium: { launch } }));
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+    expect(result.bodyText).toBe('');
+    expect(closeMock).toHaveBeenCalled();
+  });
+
+  it('bypasses check on Node < 20', async () => {
+    const originalVersions = process.versions;
+    Object.defineProperty(process, 'versions', {
+      value: { ...originalVersions, node: '18.0.0' },
+      writable: true,
+    });
+
+    try {
+      const { checkRender } = await import('../src/checks/render.js');
+      const result = await checkRender('https://example.com');
+
+      expect(result.available).toBe(false);
+      expect(result.skipReason).toContain('Render check requires Node 20+');
+    } finally {
+      Object.defineProperty(process, 'versions', {
+        value: originalVersions,
+        writable: true,
+      });
+    }
+  });
 });
