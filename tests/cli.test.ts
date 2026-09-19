@@ -106,4 +106,16 @@ describe('cli', () => {
     expect(console.error).toHaveBeenCalledWith('driftcheck crashed:', 'crash');
     expect(process.exitCode).toBe(2);
   });
+
+  it('handles crashes with non-Error objects gracefully', async () => {
+    mockDriftcheck.mockRejectedValue('string crash');
+
+    await runCli(['https://example.com']);
+
+    // Allow the unhandled rejection in cli.ts to be processed
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(console.error).toHaveBeenCalledWith('driftcheck crashed:', 'string crash');
+    expect(process.exitCode).toBe(2);
+  });
 });
