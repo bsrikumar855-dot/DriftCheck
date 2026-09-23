@@ -87,6 +87,18 @@ describe('cli', () => {
     expect(mockPrintReport).not.toHaveBeenCalled();
   });
 
+  it('prints fix prompt if --fix-prompt is provided and findings qualify', async () => {
+    mockDriftcheck.mockResolvedValue({
+      passed: false,
+      findings: [{ code: 'UNDEFINED_IN_PATH', data: { url: 'https://example.com/undefined', status: 404, token: 'undefined' } }]
+    });
+
+    await runCli(['https://example.com', '--fix-prompt']);
+
+    expect(mockPrintReport).toHaveBeenCalled();
+    expect(mockPrintFixPrompt).toHaveBeenCalled();
+  });
+
   it('parses --timeout flag', async () => {
     mockDriftcheck.mockResolvedValue({ passed: true });
 
