@@ -95,4 +95,51 @@ describe('buildFindings — all-clear message', () => {
 
     expect(findings.some((f) => f.message.includes('No obvious drift detected'))).toBe(false);
   });
+
+  it('adds DEPLOYMENT_PROTECTION finding if Vercel deployment protection is active', () => {
+    const findings = buildFindings({
+      reachability: reachability({ finalStatus: 401, ok: false }),
+      vercel: vercel({ isVercel: true, possibleDeploymentProtection: true }),
+      render: render({ available: false }),
+    });
+
+    expect(findings.some((f) => f.code === 'DEPLOYMENT_PROTECTION')).toBe(true);
+  });
+
+  it('adds PREVIEW_ENVIRONMENT finding if Vercel likely environment is preview', () => {
+    const findings = buildFindings({
+      reachability: reachability(),
+      vercel: vercel({ isVercel: true, likelyEnvironment: 'preview', environmentReason: 'is preview' }),
+      render: render({ available: false }),
+    });
+
+    expect(findings.some((f) => f.code === 'PREVIEW_ENVIRONMENT')).toBe(true);
+  });
+
+  it('adds REDIRECT_CHAIN finding if redirect chain is longer than 3', () => {
+    const findings = buildFindings({
+      reachability: reachability({
+        redirectChain: [
+          { url: 'https://example.com/1', status: 301 },
+          { url: 'https://example.com/2', status: 301 },
+          { url: 'https://example.com/3', status: 301 },
+          { url: 'https://example.com/4', status: 301 },
+        ]
+      }),
+      vercel: vercel(),
+      render: render({ available: false }),
+    });
+
+    expect(findings.some((f) => f.code === 'REDIRECT_CHAIN')).toBe(true);
+  });
+
+  it('adds BAD_STATUS finding with reachability error message if error is present', () => {
+    const findings = buildFindings({
+      reachability: reachability({ error: 'Network Error', ok: false }),
+      vercel: vercel(),
+      render: render({ available: false }),
+    });
+
+    expect(findings.some((f) => f.code === 'BAD_STATUS' && f.message === 'Network Error')).toBe(true);
+  });
 });

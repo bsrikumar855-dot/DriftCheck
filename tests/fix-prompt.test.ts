@@ -262,6 +262,56 @@ describe('buildFixPrompt — deduping findings that share the same evidence', ()
 
     expect(prompt).toContain('driftcheck found 2 issues');
   });
+
+  it('uses local host corroborating text when a localhost finding shares the url+status', () => {
+    // In order for localhost to be corroborating, we need a finding with higher priority
+    // UNDEFINED_IN_PATH (index 0) > LOCALHOST_IN_PROD (index 1)
+    const localhostCorroboratingFinding: Finding = {
+      severity: 'error',
+      message: 'Localhost in prod...',
+      code: 'LOCALHOST_IN_PROD',
+      data: { url: sharedUrl, status: 404 },
+    };
+
+    const prompt = buildFixPrompt([undefinedSameRequest, localhostCorroboratingFinding]) as string;
+    expect(prompt).toContain('its localhost check also flagged this exact request');
+  });
+
+  it('uses undefined corroborating text when an undefined in path finding shares the url+status', () => {
+    // UNDEFINED_IN_PATH is the highest priority (0), so for it to be corroborating, it must be the second
+    // undefined finding in the group, or we fake the priority using the same getter trick, but actually
+    // if there are two UNDEFINED_IN_PATH findings on the same URL and status, one is primary, one corroborates.
+    const anotherUndefinedFinding: Finding = {
+      severity: 'error',
+      message: 'Undefined in path 2...',
+      code: 'UNDEFINED_IN_PATH',
+      data: { url: sharedUrl, status: 404, token: 'null' },
+    };
+
+    const prompt = buildFixPrompt([undefinedSameRequest, anotherUndefinedFinding]) as string;
+    expect(prompt).toContain('its path check also flagged this exact request (literal "null")');
+  });
+
+  it('uses default corroborating text for unknown codes', () => {
+    let readCount = 0;
+    const sneakyFinding = {
+      severity: 'error',
+      message: 'Some other error on the same URL.',
+      data: { url: sharedUrl, status: 404 },
+      get code() {
+        readCount++;
+        // 1st read in qualifies()
+        // 2nd read in dedupeKey()
+        // 3rd read in priorityOf() inside groupQualifying sort
+        // 4th read in describeCorroborating()
+        if (readCount >= 4) return 'SNEAKY_UNKNOWN_CODE';
+        return 'SAME_ORIGIN_ERROR';
+      }
+    } as unknown as Finding;
+
+    const prompt = buildFixPrompt([undefinedSameRequest, sneakyFinding]) as string;
+    expect(prompt).toContain('another check also flagged this exact request');
+  });
 });
 
 describe('resolveFixPrompt — the opt-in gate', () => {
