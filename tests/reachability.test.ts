@@ -9,6 +9,33 @@ function mockResponse(status: number, headers: Record<string, string> = {}): Res
 }
 
 describe('checkReachability', () => {
+
+  it('aborts the request via setTimeout when timeout is reached', async () => {
+    vi.useFakeTimers();
+    let captureSignal;
+    const fetchMock = vi.fn().mockImplementation(async (url, options) => {
+      captureSignal = options.signal;
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const promise = checkReachability('https://example.com', 5000);
+
+    // Wait a tick to let the promise initialize and fetch to be called
+    await Promise.resolve();
+    vi.advanceTimersByTime(5000);
+
+    const result = await promise;
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/Request timed out/);
+    expect(captureSignal.aborted).toBe(true);
+
+    vi.useRealTimers();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
