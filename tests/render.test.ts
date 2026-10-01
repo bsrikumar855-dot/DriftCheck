@@ -129,6 +129,51 @@ describe('checkRender', () => {
     expect(result.skipReason).toMatch(/playwright-core is not installed/i);
   });
 
+  it('handles global package.json exports mapping to string directly', async () => {
+    vi.doMock('playwright-core', () => {
+      throw new Error("Cannot find module 'playwright-core'");
+    });
+
+    const globalRoot = path.join(process.cwd(), 'tests', 'fixtures', 'fake-global-root');
+    mockExec({ stdout: `${globalRoot}\n` });
+
+    const pkgJson = { exports: { '.': 'fake-index.mjs' } };
+    const readFileMock = mockReadFile({ value: JSON.stringify(pkgJson) });
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+    expect(result.playwrightCoreSource).toBe('global-npm-root');
+    expect(readFileMock).toHaveBeenCalledWith(
+      path.join(globalRoot, 'playwright-core', 'package.json'),
+      'utf-8'
+    );
+  });
+
+
+  it('handles global package.json exports mapping with no import but default present', async () => {
+    vi.doMock('playwright-core', () => {
+      throw new Error("Cannot find module 'playwright-core'");
+    });
+
+    const globalRoot = path.join(process.cwd(), 'tests', 'fixtures', 'fake-global-root');
+    mockExec({ stdout: `${globalRoot}\n` });
+
+    const pkgJson = { exports: { '.': { default: 'fake-index.mjs' } } };
+    const readFileMock = mockReadFile({ value: JSON.stringify(pkgJson) });
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+    expect(result.playwrightCoreSource).toBe('global-npm-root');
+    expect(readFileMock).toHaveBeenCalledWith(
+      path.join(globalRoot, 'playwright-core', 'package.json'),
+      'utf-8'
+    );
+  });
+
   it('degrades to skip, without crashing, when the global package.json is malformed JSON', async () => {
     vi.doMock('playwright-core', () => {
       throw new Error("Cannot find module 'playwright-core'");
@@ -281,6 +326,56 @@ describe('checkRender', () => {
       on: vi.fn(),
       goto: vi.fn().mockResolvedValue(undefined),
       evaluate: vi.fn().mockRejectedValue(new Error('Context destroyed')),
+    };
+    const launch = vi.fn().mockResolvedValue({
+      newPage: vi.fn().mockResolvedValue(page),
+      close: closeMock,
+    });
+    vi.doMock('playwright-core', () => ({ chromium: { launch } }));
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+    expect(result.bodyText).toBe('');
+    expect(closeMock).toHaveBeenCalled();
+  });
+
+  it('gracefully handles missing document.body', async () => {
+    const closeMock = vi.fn().mockResolvedValue(undefined);
+    const page = {
+      on: vi.fn(),
+      goto: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn(async (fn) => {
+        // mock what evaluate would do if document.body was undefined
+        const noBodyContext = { document: {} };
+        return fn.call(noBodyContext);
+      }),
+    };
+    const launch = vi.fn().mockResolvedValue({
+      newPage: vi.fn().mockResolvedValue(page),
+      close: closeMock,
+    });
+    vi.doMock('playwright-core', () => ({ chromium: { launch } }));
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+    expect(result.bodyText).toBe('');
+    expect(closeMock).toHaveBeenCalled();
+  });
+
+
+  it('evaluates document body correctly when whitespace is present', async () => {
+    const closeMock = vi.fn().mockResolvedValue(undefined);
+    const page = {
+      on: vi.fn(),
+      goto: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn(async (fn) => {
+        const docContext = { document: { body: { innerText: '   ' } } };
+        return fn.call(docContext);
+      }),
     };
     const launch = vi.fn().mockResolvedValue({
       newPage: vi.fn().mockResolvedValue(page),
