@@ -312,6 +312,34 @@ describe('buildFixPrompt — deduping findings that share the same evidence', ()
     const prompt = buildFixPrompt([undefinedSameRequest, sneakyFinding]) as string;
     expect(prompt).toContain('another check also flagged this exact request');
   });
+
+  it('handles findings without a code when sorting priorities', () => {
+    let readCount = 0;
+    const noCodeFinding = {
+      severity: 'error',
+      message: 'Some error without a code.',
+      data: { url: sharedUrl, status: 404 },
+      get code() {
+        readCount++;
+        // 1. qualifies
+        // 2. dedupeKey
+        // 3. priorityOf
+        // For priorityOf to see undefined, we must return undefined on the 3rd read
+        // Since a finding code is checked multiple times during sorting
+// we mock the read count directly in groupQualifying
+if (readCount > 2 && readCount < 6) return undefined;
+        return 'SAME_ORIGIN_ERROR';
+      }
+    } as unknown as Finding;
+
+    const prompt = buildFixPrompt([undefinedSameRequest, noCodeFinding]) as string;
+    // Because it falls to the lowest priority (length of CODE_PRIORITY),
+    // undefinedSameRequest (UNDEFINED_IN_PATH) should remain the primary.
+    // The missing code finding will be corroborating.
+    expect(prompt).toContain('driftcheck found a request whose URL');
+    expect(prompt).toContain('another check also flagged this exact request');
+  });
+
 });
 
 describe('resolveFixPrompt — the opt-in gate', () => {
