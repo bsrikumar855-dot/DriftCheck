@@ -228,7 +228,23 @@ describe('checkRender', () => {
           failure: () => ({ errorText: 'net::ERR_CONNECTION_RESET' }),
         });
       }),
-      evaluate: vi.fn().mockResolvedValue('Hello world'),
+      evaluate: vi.fn((fn: () => unknown) => {
+        const doc = { body: { innerText: '   Hello world   ' } };
+        const originalDoc = (globalThis as any).document;
+
+        // Execute the callback directly in the Node.js context by mocking
+        // global.document to exercise the target logic safely.
+        (globalThis as any).document = doc;
+        try {
+          return Promise.resolve(fn());
+        } finally {
+          if (originalDoc === undefined) {
+            delete (globalThis as any).document;
+          } else {
+            (globalThis as any).document = originalDoc;
+          }
+        }
+      }),
     };
 
     const launch = vi.fn().mockResolvedValue({
