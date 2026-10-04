@@ -102,6 +102,80 @@ describe('checkRender', () => {
     );
   });
 
+  it('falls back to the global npm root, resolving via the exports string', async () => {
+    vi.doMock('playwright-core', () => {
+      throw new Error("Cannot find module 'playwright-core'");
+    });
+
+    const globalRoot = path.join(process.cwd(), 'tests', 'fixtures', 'fake-global-root');
+    mockExec({ stdout: `${globalRoot}\n` });
+
+    const pkgJson = { exports: { '.': 'fake-index.mjs' } };
+    mockReadFile({ value: JSON.stringify(pkgJson) });
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+  });
+
+  it('falls back to the global npm root, resolving via the exports "default" condition', async () => {
+    vi.doMock('playwright-core', () => {
+      throw new Error("Cannot find module 'playwright-core'");
+    });
+
+    const globalRoot = path.join(process.cwd(), 'tests', 'fixtures', 'fake-global-root');
+    mockExec({ stdout: `${globalRoot}\n` });
+
+    const pkgJson = { exports: { '.': { default: 'fake-index.mjs' } } };
+    mockReadFile({ value: JSON.stringify(pkgJson) });
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+  });
+
+  it('falls back to the global npm root, resolving via "main"', async () => {
+    vi.doMock('playwright-core', () => {
+      throw new Error("Cannot find module 'playwright-core'");
+    });
+
+    const globalRoot = path.join(process.cwd(), 'tests', 'fixtures', 'fake-global-root');
+    mockExec({ stdout: `${globalRoot}\n` });
+
+    const pkgJson = { main: 'fake-index.mjs' };
+    mockReadFile({ value: JSON.stringify(pkgJson) });
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+  });
+
+  it('falls back to the global npm root, resolving via default "index.js"', async () => {
+    vi.doMock('playwright-core', () => {
+      throw new Error("Cannot find module 'playwright-core'");
+    });
+
+    // For index.js, our fake-global-root doesn't have an index.js that exports
+    // a chromium.launch mocked, so we just check if it attempts to resolve it.
+    // It will fail at the dynamic import if the file isn't there, so we'll expect
+    // available to be false but no crash.
+    const globalRoot = path.join(process.cwd(), 'tests', 'fixtures', 'fake-global-root');
+    mockExec({ stdout: `${globalRoot}\n` });
+
+    const pkgJson = {};
+    mockReadFile({ value: JSON.stringify(pkgJson) });
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    // available is false because it tries to import 'index.js' which doesn't exist
+    // in our fixture, causing dynamic import to throw. This correctly exercises the fallback logic.
+    expect(result.available).toBe(false);
+  });
+
   it('degrades to skip, without crashing, when `npm root -g` itself fails (npm not on PATH)', async () => {
     vi.doMock('playwright-core', () => {
       throw new Error("Cannot find module 'playwright-core'");
@@ -297,6 +371,41 @@ describe('checkRender', () => {
       on: vi.fn(),
       goto: vi.fn().mockResolvedValue(undefined),
       evaluate: vi.fn().mockRejectedValue(new Error('Context destroyed')),
+    };
+    const launch = vi.fn().mockResolvedValue({
+      newPage: vi.fn().mockResolvedValue(page),
+      close: closeMock,
+    });
+    vi.doMock('playwright-core', () => ({ chromium: { launch } }));
+
+    const { checkRender } = await import('../src/checks/render.js');
+    const result = await checkRender('https://example.com');
+
+    expect(result.available).toBe(true);
+    expect(result.bodyText).toBe('');
+    expect(closeMock).toHaveBeenCalled();
+  });
+
+  it('safely handles missing document.body', async () => {
+    const closeMock = vi.fn().mockResolvedValue(undefined);
+    const page = {
+      on: vi.fn(),
+      goto: vi.fn().mockResolvedValue(undefined),
+      evaluate: vi.fn((fn: () => unknown) => {
+        const doc = { body: null }; // Simulate no document body
+        const originalDoc = (globalThis as any).document;
+
+        (globalThis as any).document = doc;
+        try {
+          return Promise.resolve(fn());
+        } finally {
+          if (originalDoc === undefined) {
+            delete (globalThis as any).document;
+          } else {
+            (globalThis as any).document = originalDoc;
+          }
+        }
+      }),
     };
     const launch = vi.fn().mockResolvedValue({
       newPage: vi.fn().mockResolvedValue(page),
