@@ -239,6 +239,17 @@ describe('buildFixPrompt — deduping findings that share the same evidence', ()
     expect(prompt).toContain('driftcheck found 2 issues');
   });
 
+  it('leaves findings lacking data altogether ungrouped rather than guessing', () => {
+    const noData: Finding = {
+      severity: 'error',
+      message: 'Request targets localhost...',
+      code: 'LOCALHOST_IN_PROD',
+    };
+    const prompt = buildFixPrompt([undefinedSameRequest, noData]) as string;
+
+    expect(prompt).toContain('driftcheck found 2 issues');
+  });
+
   it('does not merge findings on different urls with the same status', () => {
     const other: Finding = {
       severity: 'error',
@@ -259,6 +270,30 @@ describe('buildFixPrompt — deduping findings that share the same evidence', ()
       data: { url: sharedUrl },
     };
     const prompt = buildFixPrompt([undefinedSameRequest, noStatus]) as string;
+
+    expect(prompt).toContain('driftcheck found 2 issues');
+  });
+
+  it('leaves findings lacking a url ungrouped rather than guessing', () => {
+    const noUrl: Finding = {
+      severity: 'error',
+      message: 'Request targets localhost...',
+      code: 'LOCALHOST_IN_PROD',
+      data: { status: 500 },
+    };
+    const prompt = buildFixPrompt([undefinedSameRequest, noUrl]) as string;
+
+    expect(prompt).toContain('driftcheck found 2 issues');
+  });
+
+  it('leaves findings lacking both url and status ungrouped rather than guessing', () => {
+    const neither: Finding = {
+      severity: 'error',
+      message: 'Request targets localhost...',
+      code: 'LOCALHOST_IN_PROD',
+      data: {},
+    };
+    const prompt = buildFixPrompt([undefinedSameRequest, neither]) as string;
 
     expect(prompt).toContain('driftcheck found 2 issues');
   });

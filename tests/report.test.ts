@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { printReport, printFixPrompt } from '../src/report.js';
-import type { DriftCheckResult } from '../src/types.js';
+import { printReport, printFixPrompt, renderFindings } from '../src/report.js';
+import type { DriftCheckResult, RenderCheckResult } from '../src/types.js';
 
 describe('report', () => {
   let originalConsoleLog: any;
@@ -284,6 +284,26 @@ describe('report', () => {
       printFixPrompt('Fix the preview environment.');
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Suggested prompt for your coding agent'));
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Fix the preview environment.'));
+    });
+  });
+
+  describe('renderFindings edge cases', () => {
+    it('handles invalid urls gracefully by catching exceptions in safeOrigin', () => {
+      const render: RenderCheckResult = {
+        available: true,
+        requests: [
+          { url: 'not_a_url_at_all', status: 500 }
+        ],
+        consoleErrors: [],
+        bodyText: 'Some body text',
+      };
+
+      // Target origin safeOrigin should also be exercised handling invalid URL
+      const findings = renderFindings('not_a_url_at_all', render);
+
+      // Because safeOrigin returns undefined for invalid target or invalid request url,
+      // the SAME_ORIGIN_ERROR should not trigger, nor should LOCALHOST_IN_PROD (since it's not localhost).
+      expect(findings).toEqual([]);
     });
   });
 });
