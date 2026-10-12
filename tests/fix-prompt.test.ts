@@ -327,6 +327,31 @@ describe('buildFixPrompt — deduping findings that share the same evidence', ()
     expect(prompt).toContain('its path check also flagged this exact request (literal "null")');
   });
 
+  it('places findings with unknown codes last in priority', () => {
+    let readCount = 0;
+    const sneakyFinding = {
+      severity: 'error',
+      message: 'Some other error on the same URL.',
+      data: { url: sharedUrl, status: 404 },
+      get code() {
+        readCount++;
+        // 1st read in qualifies()
+        // 2nd read in dedupeKey()
+        // 3rd read in priorityOf() inside groupQualifying sort (a vs b, b vs a)
+        if (readCount === 3 || readCount === 4) return 'UNKNOWN_CODE';
+        // 5th read in describeCorroborating()
+        if (readCount >= 5) return 'UNKNOWN_CODE';
+        return 'SAME_ORIGIN_ERROR';
+      }
+    } as unknown as Finding;
+
+    const prompt = buildFixPrompt([sneakyFinding, undefinedSameRequest]) as string;
+    // UNDEFINED_IN_PATH (priority 0) should be primary over UNKNOWN_CODE (priority length).
+    // Because it is the only group in the prompt, there is no "### 1. " heading. The text contains the body and corroborating note.
+    expect(prompt).toContain('driftcheck found a request whose URL path contains the literal token');
+    expect(prompt).toContain('another check also flagged this exact request');
+  });
+
   it('uses default corroborating text for unknown codes', () => {
     let readCount = 0;
     const sneakyFinding = {
