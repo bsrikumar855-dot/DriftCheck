@@ -327,6 +327,32 @@ describe('buildFixPrompt — deduping findings that share the same evidence', ()
     expect(prompt).toContain('its path check also flagged this exact request (literal "null")');
   });
 
+  it('handles findings that unexpectedly lose their code during processing', () => {
+    // Tests the fallback logic in priorityOf: 'const index = finding.code ? ...'
+    // This is an extreme edge case where a finding is mutated after qualification.
+    let accessCount = 0;
+    const mutatingFinding = {
+      severity: 'error',
+      message: 'Mutating finding',
+      data: { url: sharedUrl, status: 404 },
+      get code() {
+        accessCount++;
+        // 1: qualifies (must pass to enter grouping)
+        // 2: dedupeKey (grouping key)
+        if (accessCount <= 2) return 'SAME_ORIGIN_ERROR';
+
+        // 3+: priorityOf and beyond. Return undefined to hit line 55 fallback.
+        return undefined;
+      }
+    } as unknown as Finding;
+
+    const prompt = buildFixPrompt([mutatingFinding, undefinedSameRequest]) as string;
+
+    // undefinedSameRequest should be prioritized first due to the mutation
+    expect(prompt).toContain('driftcheck found a request whose URL path contains the literal token');
+    expect(prompt).toContain('another check also flagged this exact request');
+  });
+
   it('places findings with unknown codes last in priority', () => {
     let readCount = 0;
     const sneakyFinding = {
