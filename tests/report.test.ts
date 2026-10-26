@@ -240,7 +240,7 @@ describe('report', () => {
       };
 
       printReport(mockResult);
-      // vitest string mock coverage
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('301'));
     });
 
     it('covers env color production and error status color', () => {
@@ -274,8 +274,7 @@ describe('report', () => {
       printReport(mockResult);
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('system Edge'));
       expect(console.log).toHaveBeenCalledWith(expect.stringContaining('production'));
-      // Wait we need to assert that pc.red was called? the console string will contain ANSI codes if we check it strictly, but vitest mock of console.log captures the string.
-      // We can just verify it runs to get coverage.
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('500'));
     });
   });
 
