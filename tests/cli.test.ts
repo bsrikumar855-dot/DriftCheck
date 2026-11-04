@@ -31,6 +31,7 @@ describe('cli', () => {
   afterEach(() => {
     process.argv = originalArgv;
     process.exitCode = originalExitCode;
+    vi.restoreAllMocks();
     vi.resetModules();
   });
 
