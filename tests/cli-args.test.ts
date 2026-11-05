@@ -44,6 +44,13 @@ describe('parseArgs', () => {
   it('still treats the url as the sole non-flag argument', () => {
     expect(parseArgs(argv('--fix-prompt', 'https://example.com')).url).toBe('https://example.com');
   });
+
+  it('ignores invalid timeout values (NaN, negative, zero) and falls back to undefined', () => {
+    expect(parseArgs(argv('https://example.com', '--timeout=abc')).timeoutMs).toBeUndefined();
+    expect(parseArgs(argv('https://example.com', '--timeout=')).timeoutMs).toBeUndefined();
+    expect(parseArgs(argv('https://example.com', '--timeout=-500')).timeoutMs).toBeUndefined();
+    expect(parseArgs(argv('https://example.com', '--timeout=0')).timeoutMs).toBeUndefined();
+  });
 });
 
 describe('CLI output contract — plain mode', () => {
